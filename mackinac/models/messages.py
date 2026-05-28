@@ -155,9 +155,12 @@ class QuoteMessage(BaseModel):
 class PrintMessage(BaseModel):
     """Single trade execution.
 
-    The ``d_*`` stat-engine fields are present only on Hyperliquid prints.
-    ``blockNumber``, ``txIndex``, ``logSender``, and ``tick`` are present only
-    on on-chain venues (AMM, Ostium, Lighter, Pendle, Spectra).
+    The ``d_*`` stat-engine fields are present on Hyperliquid and dYdX prints.
+    ``blockNumber`` is present on every on-chain venue (AMM, Ostium, dYdX,
+    Pendle, Spectra).  ``txIndex``, ``logSender``, and ``tick`` are present
+    only on EVM venues (AMM, Ostium, Pendle, Spectra) — dYdX prints carry
+    ``blockNumber`` but not ``txIndex`` since the Cosmos chain orders many
+    fills within a single block.
     """
     model_config = _cfg
     type: Literal["print"]
@@ -192,7 +195,7 @@ class FundingMessage(BaseModel):
 
     ``ratePct`` is an ANNUALIZED percentage (not bps, not decimal fraction).
     Positive = longs pay shorts; negative = shorts pay longs.
-    ``intervalHrs`` is the native venue payment cadence (HL=8, GMX/Vertex=1, Ostium=24).
+    ``intervalHrs`` is the native venue payment cadence (HL=8, dYdX=8, GMX/Vertex=1, Ostium=24).
     """
     model_config = _cfg
     type: Literal["funding"]

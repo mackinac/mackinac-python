@@ -1,8 +1,8 @@
 # mackinac-client
 
 Python client for the [Mackinac](https://mackinac.io) market-data API — live
-quotes, trades, funding rates, and yield rates across 12 DeFi venues including
-Hyperliquid, Uniswap V3/V4, Pendle, Spectra, GMX, Vertex, Ostium, and more.
+quotes, trades, funding rates, and yield rates across 13 DeFi venues including
+Hyperliquid, dYdX V4, Uniswap V3/V4, Pendle, Spectra, GMX, Vertex, Ostium, and more.
 
 ```
 pip install mackinac-client
@@ -116,6 +116,7 @@ on `msg.type` to branch per message type.
 | Venue | Key format | Example |
 |-------|-----------|---------|
 | Hyperliquid perp | `hl:<SYMBOL>` | `hl:ETH` |
+| dYdX V4 perp | `dydx:<BASE>-USD` | `dydx:ETH-USD` |
 | Uniswap V3 (Arbitrum) | `uni:<BASE>/<QUOTE>` | `uni:WETH/USDC` |
 | Uniswap V4 (Arbitrum) | `univ4:<BASE>/<QUOTE>` | `univ4:WETH/USDC` |
 | SushiSwap V3 | `sushi:<BASE>/<QUOTE>` | `sushi:WETH/USDC` |
@@ -231,7 +232,7 @@ await client.refresh_token()       # new 7-day JWT with updated tier claims
 |------|-------------|--------|
 | `QuoteMessage` | Top-of-book snapshot | All |
 | `PrintMessage` | Trade execution | CLOB, AMM, Oracle*, Yield |
-| `FundingMessage` | Perpetual funding rate | HL, GMX, Vertex, Ostium |
+| `FundingMessage` | Perpetual funding rate | HL, dYdX, GMX, Vertex, Ostium |
 | `DepthMessage` | Concentrated-liquidity tick snapshot + market impact | AMM |
 | `LiquidityMessage` | LP Mint/Burn event | AMM |
 | `RateMarketMessage` | Yield-market snapshot | Pendle, Spectra |

@@ -63,8 +63,14 @@ class _SubscribeThrottle:
 def _dedup_key(msg: dict[str, Any]) -> Optional[tuple]:
     """Return a dedup key for PrintMessage frames; None for all other types.
 
-    On-chain venues: deduplicated by (exchange, symbol, blockNumber, txIndex).
-    HL (no blockNumber): deduplicated by (exchange, symbol, time, price, size, side).
+    Three branches, matched to the backend's dedup semantics per venue class:
+
+    - AMM / Ostium / Pendle / Spectra (block + txIndex):
+        ``(exchange, symbol, blockNumber, txIndex)``
+    - dYdX (block, no txIndex — many fills per block):
+        ``(exchange, symbol, blockNumber, time, price, size, side)``
+    - HL (no block at all):
+        ``(exchange, symbol, time, price, size, side)``
     """
     if msg.get("type") != "print":
         return None
@@ -74,6 +80,8 @@ def _dedup_key(msg: dict[str, Any]) -> Optional[tuple]:
     sym = msg.get("symbol")
     if block is not None and tx is not None:
         return (exchange, sym, block, tx)
+    if block is not None:
+        return (exchange, sym, block, msg.get("time"), msg.get("price"), msg.get("size"), msg.get("side"))
     return (exchange, sym, msg.get("time"), msg.get("price"), msg.get("size"), msg.get("side"))
 
 

@@ -1,8 +1,8 @@
 """multi_venue_basis.py — compute live cross-venue basis between HL ETH perp,
-Uniswap V3 WETH/USDC spot, and Lighter ETH perp.
+Uniswap V3 WETH/USDC spot, and dYdX V4 ETH-USD perp.
 
 Shows the normalized data model: the same QuoteMessage fields work across
-CLOB, AMM, and oracle venues.
+two CLOBs (HL and dYdX) and an AMM (Uniswap V3).
 
 Anonymous: 3 symbols is at the free-tier cap, so make sure no other anonymous
 sessions are active from your IP.  Pass MACKINAC_TOKEN to bypass the cap.
@@ -17,13 +17,13 @@ from datetime import datetime, timezone
 
 from mackinac import AsyncClient, QuoteMessage
 
-SUBSCRIPTIONS = ["hl:ETH", "uni:WETH/USDC", "lighter:ETH"]
+SUBSCRIPTIONS = ["hl:ETH", "uni:WETH/USDC", "dydx:ETH-USD"]
 
 # Key used to store latest mid-price per venue
 LABEL = {
     "hl:ETH":         "HL perp",
     "uni:WETH/USDC":  "Uni V3 spot",
-    "lighter:ETH":    "Lighter perp",
+    "dydx:ETH-USD":   "dYdX perp",
 }
 
 
@@ -43,7 +43,7 @@ async def main() -> None:
     client = AsyncClient.from_token(token) if token else AsyncClient()
 
     async with client:
-        print("Subscribing to HL / Uni / Lighter ETH quotes…\n")
+        print("Subscribing to HL / Uni / dYdX ETH quotes…\n")
         async with client.subscribe(*SUBSCRIPTIONS) as feed:
             async for msg in feed:
                 if not isinstance(msg, QuoteMessage):
@@ -58,23 +58,23 @@ async def main() -> None:
                 if len(latest) < 3:
                     continue  # wait until we have all three
 
-                hl    = latest.get("hl:ETH")
-                uni   = latest.get("uni:WETH/USDC")
-                light = latest.get("lighter:ETH")
+                hl   = latest.get("hl:ETH")
+                uni  = latest.get("uni:WETH/USDC")
+                dydx = latest.get("dydx:ETH-USD")
 
-                if not (hl and uni and light):
+                if not (hl and uni and dydx):
                     continue
 
                 ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
-                hl_uni_bps   = (hl   - uni)   / uni   * 10_000
-                hl_light_bps = (hl   - light) / light * 10_000
+                hl_uni_bps  = (hl - uni)  / uni  * 10_000
+                hl_dydx_bps = (hl - dydx) / dydx * 10_000
                 print(
                     f"[{ts}]  "
                     f"HL {hl:>10.2f}  "
                     f"Uni {uni:>10.2f}  "
-                    f"Lighter {light:>10.2f}  │  "
-                    f"HL–Uni {hl_uni_bps:>+7.1f}bps  "
-                    f"HL–Lighter {hl_light_bps:>+7.1f}bps"
+                    f"dYdX {dydx:>10.2f}  |  "
+                    f"HL-Uni {hl_uni_bps:>+7.1f}bps  "
+                    f"HL-dYdX {hl_dydx_bps:>+7.1f}bps"
                 )
 
 

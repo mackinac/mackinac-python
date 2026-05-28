@@ -10,7 +10,7 @@ __all__ = [
     "amm_pair",
     "hl_perp",
     "hl_spot",
-    "lighter_perp",
+    "dydx_perp",
     "gmx_perp",
     "vertex_perp",
     "ostium_pair",
@@ -54,13 +54,22 @@ def hl_spot(base: str, quote: str = "USDC") -> str:
     return f"{base}/{quote}"
 
 
-def lighter_perp(asset: str) -> str:
-    """Lighter (Arbitrum ZK rollup) perpetual symbol — same convention as HL.
+def dydx_perp(asset: str) -> str:
+    """dYdX V4 perpetual symbol (``BASE-USD``).
 
-    >>> lighter_perp("BTC")
-    'BTC'
+    Accepts bare tickers and appends ``-USD``; idempotent on already-canonical
+    strings so ``dydx_perp(dydx_perp("ETH")) == "ETH-USD"``.  The backend also
+    auto-normalizes bare tickers, so ``dydx:ETH`` would work too — this helper
+    just spells the canonical form out.
+
+    >>> dydx_perp("ETH")
+    'ETH-USD'
+    >>> dydx_perp("BTC-USD")
+    'BTC-USD'
     """
-    return asset
+    if asset.endswith("-USD") or asset.endswith("-USDC"):
+        return asset
+    return f"{asset}-USD"
 
 
 def gmx_perp(asset: str) -> str:
