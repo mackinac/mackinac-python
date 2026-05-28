@@ -1,7 +1,7 @@
 # mackinac-client
 
 Python client for the [Mackinac](https://mackinac.io) market-data API — live
-quotes, trades, funding rates, and yield rates across 13 DeFi venues including
+quotes, trades, funding rates, and yield rates across 12 DeFi venues including
 Hyperliquid, Uniswap V3/V4, Pendle, Spectra, GMX, Vertex, Ostium, and more.
 
 ```
@@ -120,7 +120,6 @@ on `msg.type` to branch per message type.
 | Uniswap V4 (Arbitrum) | `univ4:<BASE>/<QUOTE>` | `univ4:WETH/USDC` |
 | SushiSwap V3 | `sushi:<BASE>/<QUOTE>` | `sushi:WETH/USDC` |
 | PancakeSwap V3 | `pancake:<BASE>/<QUOTE>` | `pancake:WBTC/WETH` |
-| Lighter perp | `lighter:<SYMBOL>` | `lighter:ETH` |
 | GMX perp | `gmx:<SYMBOL>` | `gmx:BTC` |
 | Vertex perp | `vertex:<SYMBOL>` | `vertex:SOL` |
 | Ostium (RWA) | `ostium:<BASE>/<QUOTE>` | `ostium:XAU/USD` |
@@ -232,7 +231,7 @@ await client.refresh_token()       # new 7-day JWT with updated tier claims
 |------|-------------|--------|
 | `QuoteMessage` | Top-of-book snapshot | All |
 | `PrintMessage` | Trade execution | CLOB, AMM, Oracle*, Yield |
-| `FundingMessage` | Perpetual funding rate | HL, Lighter, GMX, Vertex, Ostium |
+| `FundingMessage` | Perpetual funding rate | HL, GMX, Vertex, Ostium |
 | `DepthMessage` | Concentrated-liquidity tick snapshot + market impact | AMM |
 | `LiquidityMessage` | LP Mint/Burn event | AMM |
 | `RateMarketMessage` | Yield-market snapshot | Pendle, Spectra |
@@ -314,7 +313,7 @@ pip install 'mackinac-client[dev]'      # testing + model codegen
 | `examples/historical_trades.py` | 7-day Ostium XAU/USD → CSV |
 | `examples/yield_rates.py` | Pendle + Spectra live APY table |
 | `examples/reconnect_pattern.py` | Iterator survives forced disconnect |
-| `examples/multi_venue_basis.py` | HL / Uni / Lighter cross-venue basis |
+| `examples/multi_venue_basis.py` | Cross-venue ETH basis across CLOB, AMM, and oracle venues |
 | `examples/amm_fee_table.py` | AMM depth → pandas fee-tier impact table |
 | `examples/rate_table.py` | rate_market stream → pandas DataFrame |
 | `examples/funding_carry.py` | CME vs HL vs Ostium carry cost comparison |
