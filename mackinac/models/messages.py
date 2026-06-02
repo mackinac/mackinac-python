@@ -30,6 +30,8 @@ __all__ = [
     "LiquidityMessage",
     "RateMarketMessage",
     "RateDepthMessage",
+    "LendingActionMessage",
+    "RateModelParamsMessage",
     "AmmBookMessage",
     "AmmLiquiditySnapshotMessage",
     "ArbFlagMessage",
@@ -250,32 +252,60 @@ class LiquidityMessage(BaseModel):
 
 
 class RateMarketMessage(BaseModel):
-    """Live yield-market snapshot (Pendle or Spectra).
+    """Per-market snapshot.  Used by two venue families with overlapping fields:
 
-    APY fields (``underlyingApy``, ``impliedApy``, ``lpApy``) are DECIMAL
-    FRACTIONS — 0.131 = 13.1%.
+    **Yield-rate venues** (Pendle, Spectra) — ``impliedApy``, ``ptPrice``,
+    ``ytPrice``, ``expiry``, ``lpApy`` etc. carry the PT-fixed-rate story.
+    Lending-specific fields (``borrowApy``, ``utilization``, ``available``)
+    are absent.
 
-    Venue-dependent semantics:
-    - ``ptPrice``: Pendle = USD price; Spectra = fraction of IBT (1.0 = parity)
-    - ``tvl``: Pendle = USD TVL; Spectra v1 = underlying-asset units (no USD oracle)
+    **Lending venues** (Aave V3, Compound V3, Morpho Blue) — ``underlyingApy``
+    doubles as supply APY; ``borrowApy``, ``utilization``, ``available`` and
+    (Morpho-only) ``rateAtTarget`` are populated.  PT-yield fields
+    (``impliedApy``, ``ptPrice``, ``expiry``, ``daysToExpiry``, ``volume24h``)
+    carry sentinel zeros on lending rows — branch on ``exchange`` ∈
+    ``{"aave", "compound", "morpho"}`` when interpreting.
+
+    All APY fields are DECIMAL FRACTIONS (0.131 = 13.1%/yr), not percentages.
+
+    Venue-dependent ``ptPrice`` semantics (yield only):
+    - Pendle = USD price
+    - Spectra = fraction of IBT (1.0 = parity with underlying)
+
+    Venue-dependent ``tvl`` semantics:
+    - Pendle / lending venues = USD TVL
+    - Spectra v1 = underlying-asset units (no USD oracle path yet)
+
+    Use ``address`` as the unique market key with ``client.history_rates(addr)``.
+    For Morpho specifically, ``address`` is the 32-byte ``id`` and ``symbol``
+    is the ``LOAN/COLLATERAL`` pair string while ``asset`` holds just the loan
+    asset (e.g. ``"USDC"``).
     """
     model_config = _cfg
     type: Literal["rate_market"]
-    exchange: str          # "pendle" or "spectra"
+    exchange: str          # "pendle", "spectra", "aave", "compound", or "morpho"
     chain: str
-    address: str           # market contract address — unique key
-    symbol: str            # human-readable PT symbol
-    underlyingApy: float   # current variable yield (decimal fraction)
-    impliedApy: float      # fixed rate implied by market price (decimal fraction)
-    lpApy: float           # LP reward APY; always 0 for Spectra v1
-    ptPrice: float         # venue-dependent — see docstring
+    address: str           # market contract address (or 32-byte id for Morpho)
+    symbol: str            # PT symbol (yield) or asset/pair (lending)
+    underlyingApy: float   # variable yield (yield) OR supply APY (lending)
+    impliedApy: float      # fixed rate (yield); sentinel for lending
+    lpApy: float           # LP reward APY; always 0 for Spectra v1 and lending
+    ptPrice: float         # venue-dependent (yield); sentinel for lending
     ytPrice: float
-    expiry: int            # epoch ms of maturity
-    daysToExpiry: float
+    expiry: int            # epoch ms (yield); 0 for lending
+    daysToExpiry: float    # 0 for lending
     tvl: float             # venue-dependent — see docstring
-    volume24h: float
+    volume24h: float       # 0 for Spectra v1 and lending
     tradingFeeRate: Optional[float] = None
     time: int
+
+    # Lending-only fields (Aave / Compound / Morpho).  All Optional so the
+    # model still validates against pure yield-rate rows.
+    asset: Optional[str] = None          # loan asset symbol (e.g. "USDC")
+    borrowApy: Optional[float] = None    # variable borrow APY (decimal)
+    utilization: Optional[float] = None  # borrowed / supplied ratio in [0, 1]
+    available: Optional[float] = None    # unborrowed USD currently in the pool
+    rateAtTarget: Optional[float] = None # Morpho AdaptiveCurveIRM drift state
 
 
 class RateDepthMessage(BaseModel):
@@ -295,6 +325,99 @@ class RateDepthMessage(BaseModel):
     daysToExpiry: float
     levels: list[RateDepthLevel]
     time: int
+
+
+class LendingActionMessage(BaseModel):
+    """Discrete on-chain lending event (Aave V3, Compound V3, Morpho Blue).
+
+    One frame per event — Supply / Withdraw / Borrow / Repay / Liquidate /
+    FlashLoan — emitted in real time.
+
+    ``amount`` is the raw uint256 token amount as a decimal STRING to preserve
+    18-decimal-token precision; divide by ``10**decimals(asset)`` for human
+    units (USDC=6, WBTC=8, most ERC-20s=18).  ``amountUsd`` is the
+    platform-estimated USD notional when an oracle was wired at emit time —
+    often absent on Morpho where many markets have no oracle.
+
+    ``rateAtTime`` is populated only on Aave ``borrow`` events (the locked
+    variable-borrow rate at borrow-time).  Compound recomputes per-block from
+    utilisation so the field is omitted there.
+
+    Liquidation events populate ``liquidator``, ``collateralAsset``, and
+    ``collateralAmount``.
+
+    ``(blockNumber, txIndex, logSender)`` uniquely identifies the on-chain
+    event for dedup across resubscribes.
+    """
+    model_config = _cfg
+    type: Literal["lending_action"]
+    exchange: str          # "aave", "compound", or "morpho"
+    chain: str             # "arbitrum" or "base"
+    asset: str             # loan/base asset symbol (e.g. "USDC")
+    market: str            # reserve / Comet / Morpho-id address
+    action: Literal["supply", "withdraw", "borrow", "repay", "liquidate", "flashloan"]
+    user: str              # raw lowercase EVM address
+    amount: str            # raw uint256 as decimal string
+    blockNumber: int
+    txIndex: int
+    logSender: str         # emitting contract address (lowercase)
+    time: int              # epoch ms
+
+    onBehalfOf: Optional[str] = None       # Aave: delegated supply/borrow target
+    amountUsd: Optional[float] = None      # USD notional, oracle-dependent
+    rateAtTime: Optional[float] = None     # locked variable borrow rate (Aave borrow only)
+    collateralAsset: Optional[str] = None  # liquidate only
+    collateralAmount: Optional[str] = None # liquidate only; raw uint256 decimal string
+    liquidator: Optional[str] = None       # liquidate only; raw lowercase EVM address
+
+
+class RateModelParamsMessage(BaseModel):
+    """Interest Rate Model curve parameters for a lending market.
+
+    Hourly per market with fingerprint-dedup on
+    ``(exchange, chain, market)`` — unchanged params don't broadcast, so in
+    steady state most markets emit once on first observation and go silent.
+
+    Two IRM families share this message shape; branch on which fields are
+    populated to pick the formula.
+
+    **Aave V3 / Compound V3** (piecewise-linear kinked curve):
+    populates ``baseRate``, ``slope1``, ``slope2``, ``kink``,
+    ``reserveFactor`` (Aave), ``maxRate`` (Aave).  Reconstruct::
+
+        if util <= kink:  apr = baseRate + slope1 * (util / kink)
+        else:             apr = baseRate + slope1 + slope2 * ((util - kink) / (1 - kink))
+
+    **Morpho Blue AdaptiveCurveIRM** (exponential drift):
+    populates ``targetUtil``, ``curveSteepness``, ``adjSpeed``.  Combine with
+    ``rateAtTarget(t)`` from the matching ``RateMarketMessage`` row::
+
+        apr = rateAtTarget(t) * exp(curveSteepness * (util - targetUtil))
+
+    All numeric fields are decimal APR (0.025 = 2.5%/yr), except utilisation
+    fields (``kink``, ``targetUtil``) which are 0..1 ratios.
+    """
+    model_config = _cfg
+    type: Literal["rate_model_params"]
+    exchange: str          # "aave", "compound", or "morpho"
+    chain: str             # "arbitrum" or "base"
+    market: str            # reserve / Comet / Morpho-id address
+    asset: str             # loan asset symbol
+    irmAddress: str        # IRM strategy contract address
+    time: int              # epoch ms
+
+    # Aave / Compound (piecewise-linear)
+    baseRate: Optional[float] = None
+    slope1: Optional[float] = None
+    slope2: Optional[float] = None
+    kink: Optional[float] = None
+    reserveFactor: Optional[float] = None  # Aave only
+    maxRate: Optional[float] = None        # Aave only
+
+    # Morpho AdaptiveCurveIRM (exponential)
+    targetUtil: Optional[float] = None
+    curveSteepness: Optional[float] = None
+    adjSpeed: Optional[float] = None
 
 
 class AmmBookMessage(BaseModel):

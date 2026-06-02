@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mackinac-client"
-version = "0.1.1"
+version = "0.2.0"
 description = "Python client for the Mackinac market-data API — live quotes, trades, funding, and yield rates across 13 DeFi venues"
 readme = "README.md"
 requires-python = ">=3.10"

@@ -27,9 +27,11 @@ from .models.rest import (
     ApiKeyCreated,
     ExchangeSymbolsResponse,
     HistoryFunding,
+    HistoryLendingAction,
     HistoryPrint,
     HistoryQuote,
     HistoryRate,
+    HistoryRateModelParams,
     InstrumentVenues,
     LoginResponse,
     MarketsResponse,
@@ -41,6 +43,27 @@ from .models.rest import (
 )
 
 __all__ = ["AsyncClient"]
+
+
+def _flatten_symbol_list(body: Any) -> list[str]:
+    """Normalize the symbol-list response shape.
+
+    The backend may return either a bare ``list[str]`` (legacy) or a dict
+    of the form ``{"defaultSort": "activity", "symbols": [{"symbol": "BTC",
+    "activity": ..., "activityKind": "vol"}, ...]}``.  Callers always want
+    a flat list of symbol strings, sorted in the server-provided order.
+    """
+    if isinstance(body, list):
+        # Legacy: already a list of strings (or a list of dicts).
+        if body and isinstance(body[0], dict) and "symbol" in body[0]:
+            return [item["symbol"] for item in body]
+        return body  # type: ignore[return-value]
+    if isinstance(body, dict):
+        items = body.get("symbols", [])
+        if items and isinstance(items[0], dict) and "symbol" in items[0]:
+            return [item["symbol"] for item in items]
+        return list(items)
+    return []
 
 
 class AsyncClient:
@@ -274,7 +297,7 @@ class AsyncClient:
             return SymbolsResponse(**r.json())
         if kind is not None:
             r = await self._get(f"/v1/symbols/{exchange}/{kind}")
-            return r.json()  # bare list[str]
+            return _flatten_symbol_list(r.json())
         r = await self._get(f"/v1/symbols/{exchange}")
         return ExchangeSymbolsResponse(**r.json())
 
@@ -306,7 +329,7 @@ class AsyncClient:
         for ex in exchanges:
             try:
                 r = await self._get(f"/v1/symbols/{ex}/live")
-                result[ex] = r.json()
+                result[ex] = _flatten_symbol_list(r.json())
             except Exception:
                 pass
         return result
@@ -328,7 +351,7 @@ class AsyncClient:
         for ex in exchanges:
             try:
                 r = await self._get(f"/v1/symbols/{ex}/historical")
-                result[ex] = r.json()
+                result[ex] = _flatten_symbol_list(r.json())
             except Exception:
                 pass
         return result
@@ -477,6 +500,70 @@ class AsyncClient:
         ):
             yield HistoryRate(**row)
 
+    async def history_lending_actions(
+        self,
+        exchange: str,
+        asset: str,
+        *,
+        start: Optional[Union[str, int]] = None,
+        end: Optional[Union[str, int]] = None,
+        limit: int = 1_000,
+        chain: Optional[str] = None,
+        action: Optional[str] = None,
+    ) -> AsyncGenerator[HistoryLendingAction, None]:
+        """Iterate over historical lending action events.
+
+        Args:
+            exchange: ``"aave"``, ``"compound"``, or ``"morpho"``.
+            asset: Loan / base-asset symbol (e.g. ``"USDC"``, ``"WETH"``).
+            start: ISO 8601 string or epoch ms.  Defaults to 24 hours ago.
+            end: Same format as ``start``.  Defaults to now.
+            limit: Rows per page (max 10 000).
+            chain: Optional filter — ``"arbitrum"`` or ``"base"``.
+            action: Optional filter — one of ``"supply"`` / ``"withdraw"`` /
+                ``"borrow"`` / ``"repay"`` / ``"liquidate"`` / ``"flashloan"``.
+
+        Yields:
+            :class:`~mackinac.models.rest.HistoryLendingAction` rows,
+            oldest first.
+        """
+        async for row in self._history_iter(
+            f"/v1/history/lending/{exchange}/{_urlquote(asset, safe='')}/actions",
+            start=start, end=end, limit=limit,
+            extra_params={"chain": chain, "action": action},
+        ):
+            yield HistoryLendingAction(**row)
+
+    async def history_lending_model(
+        self,
+        exchange: str,
+        asset: str,
+        *,
+        start: Optional[Union[str, int]] = None,
+        end: Optional[Union[str, int]] = None,
+        limit: int = 1_000,
+        chain: Optional[str] = None,
+    ) -> AsyncGenerator[HistoryRateModelParams, None]:
+        """Iterate over historical IRM (Interest Rate Model) parameter snapshots.
+
+        Aave/Compound rows populate piecewise-linear fields (``baseRate``,
+        ``slope1``, ``slope2``, ``kink``, ``reserveFactor``, ``maxRate``);
+        Morpho rows populate AdaptiveCurveIRM fields (``targetUtil``,
+        ``curveSteepness``, ``adjSpeed``).  See
+        :class:`~mackinac.models.rest.HistoryRateModelParams` for branching.
+
+        Args:
+            exchange: ``"aave"``, ``"compound"``, or ``"morpho"``.
+            asset: Loan / base-asset symbol.
+            chain: Optional filter — ``"arbitrum"`` or ``"base"``.
+        """
+        async for row in self._history_iter(
+            f"/v1/history/lending/{exchange}/{_urlquote(asset, safe='')}/model",
+            start=start, end=end, limit=limit,
+            extra_params={"chain": chain},
+        ):
+            yield HistoryRateModelParams(**row)
+
     async def _history_iter(
         self,
         path: str,
@@ -484,13 +571,21 @@ class AsyncClient:
         start: Optional[Union[str, int]],
         end: Optional[Union[str, int]],
         limit: int,
+        extra_params: Optional[dict[str, Any]] = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
-        """Paginate a history endpoint, yielding raw row dicts."""
+        """Paginate a history endpoint, yielding raw row dicts.
+
+        ``extra_params`` are merged into the query string on each page
+        request — used by endpoints with filter kwargs (e.g. lending's
+        ``chain`` and ``action``).
+        """
         params: dict[str, Any] = {"limit": limit}
         if start is not None:
             params["from"] = start
         if end is not None:
             params["to"] = end
+        if extra_params:
+            params.update({k: v for k, v in extra_params.items() if v is not None})
 
         while True:
             r = await self._get(path, params=params)

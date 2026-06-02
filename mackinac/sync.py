@@ -33,9 +33,11 @@ from .models.rest import (
     ApiKey,
     ApiKeyCreated,
     HistoryFunding,
+    HistoryLendingAction,
     HistoryPrint,
     HistoryQuote,
     HistoryRate,
+    HistoryRateModelParams,
     InstrumentVenues,
     MarketStatus,
     MeResponse,
@@ -422,6 +424,48 @@ class Mackinac:
         """Iterate over historical yield-market snapshots for a Pendle/Spectra market."""
         yield from self._run_async_gen(
             self._ac.history_rates(address, start=start, end=end, limit=limit)
+        )
+
+    def history_lending_actions(
+        self,
+        exchange: str,
+        asset: str,
+        *,
+        start: Optional[Union[str, int]] = None,
+        end: Optional[Union[str, int]] = None,
+        limit: int = 1_000,
+        chain: Optional[str] = None,
+        action: Optional[str] = None,
+    ) -> Iterator[HistoryLendingAction]:
+        """Iterate over historical lending action events (supply/borrow/etc).
+
+        See :meth:`AsyncClient.history_lending_actions` for argument semantics.
+        """
+        yield from self._run_async_gen(
+            self._ac.history_lending_actions(
+                exchange, asset, start=start, end=end, limit=limit,
+                chain=chain, action=action,
+            )
+        )
+
+    def history_lending_model(
+        self,
+        exchange: str,
+        asset: str,
+        *,
+        start: Optional[Union[str, int]] = None,
+        end: Optional[Union[str, int]] = None,
+        limit: int = 1_000,
+        chain: Optional[str] = None,
+    ) -> Iterator[HistoryRateModelParams]:
+        """Iterate over historical IRM curve parameters.
+
+        See :meth:`AsyncClient.history_lending_model` for argument semantics.
+        """
+        yield from self._run_async_gen(
+            self._ac.history_lending_model(
+                exchange, asset, start=start, end=end, limit=limit, chain=chain,
+            )
         )
 
     # ── WebSocket subscriptions ───────────────────────────────────────────────

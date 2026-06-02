@@ -51,11 +51,13 @@ from .models import (
     FeedMessage,
     FeedStaleMessage,
     FundingMessage,
+    LendingActionMessage,
     LiquidityMessage,
     PrintMessage,
     QuoteMessage,
     RateDepthMessage,
     RateMarketMessage,
+    RateModelParamsMessage,
     ServerClosingMessage,
     SnapshotMessage,
     SpreadMessage,
@@ -63,7 +65,7 @@ from .models import (
 )
 from . import symbols
 
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 __protocol_version__ = "1.0.0"
 
 __all__ = [
@@ -90,6 +92,8 @@ __all__ = [
     "LiquidityMessage",
     "RateMarketMessage",
     "RateDepthMessage",
+    "LendingActionMessage",
+    "RateModelParamsMessage",
     "AmmBookMessage",
     "AmmLiquiditySnapshotMessage",
     "ArbFlagMessage",

@@ -19,6 +19,14 @@ __all__ = [
     "rates_all",
     "rates_swaps",
     "rates_market",
+    "aave_market",
+    "aave_all",
+    "compound_market",
+    "compound_all",
+    "morpho_market",
+    "morpho_all",
+    "morpho_market_id",
+    "lending_actions",
 ]
 
 
@@ -153,3 +161,95 @@ def rates_market(pt_symbol_or_address: str) -> str:
     'rates:PT-weETH-25JUN2026'
     """
     return f"rates:{pt_symbol_or_address}"
+
+
+# ── Lending venues (Aave V3, Compound V3, Morpho Blue) ─────────────────────────
+#
+# Subscribe key form is ``<exchange>:<symbol>``.  The helpers below return only
+# the symbol portion so they compose with ``client.subscribe(f"aave:{...}")``,
+# matching the bare-perp pattern used by ``hl_perp`` / ``gmx_perp``.
+# ``lending_actions()`` returns the full consolidated key since it has no
+# per-asset form.
+
+
+def aave_market(asset: str) -> str:
+    """Aave V3 reserve symbol — the loan/base asset (uppercase).
+
+    >>> aave_market("usdc")
+    'USDC'
+    """
+    return asset.upper()
+
+
+def aave_all() -> str:
+    """Subscribe-symbol meaning "every Aave reserve on every chain".
+
+    >>> aave_all()
+    'all'
+    """
+    return "all"
+
+
+def compound_market(asset: str) -> str:
+    """Compound V3 Comet base-asset symbol (uppercase).
+
+    >>> compound_market("usdc")
+    'USDC'
+    """
+    return asset.upper()
+
+
+def compound_all() -> str:
+    """Subscribe-symbol meaning "every Compound Comet on every chain".
+
+    >>> compound_all()
+    'all'
+    """
+    return "all"
+
+
+def morpho_market(asset: str) -> str:
+    """Morpho Blue loan-asset symbol (uppercase).
+
+    Morpho markets are identified on-chain by a 32-byte ``id``, but the
+    subscribe surface groups them by loan asset.  Use ``morpho_market_id``
+    for the canonical address form needed by ``history_rates``.
+
+    >>> morpho_market("usdc")
+    'USDC'
+    """
+    return asset.upper()
+
+
+def morpho_all() -> str:
+    """Subscribe-symbol meaning "every Morpho market on every chain".
+
+    >>> morpho_all()
+    'all'
+    """
+    return "all"
+
+
+def morpho_market_id(id_hex: str) -> str:
+    """Canonical Morpho Blue market id (lowercased 0x-prefixed 32-byte hex).
+
+    Use with ``client.history_rates(addr)`` to pull historical rate-market
+    snapshots for one specific Morpho market.
+
+    >>> morpho_market_id("0xABC")
+    '0xabc'
+    """
+    return id_hex.lower()
+
+
+def lending_actions() -> str:
+    """Subscribe key for the consolidated lending-event stream.
+
+    Returns the full ``'lending:actions'`` topic.  All Supply / Withdraw /
+    Borrow / Repay / Liquidate / FlashLoan events from Aave, Compound, and
+    Morpho arrive on one feed.
+
+    >>> lending_actions()
+    'lending:actions'
+    """
+    return "lending:actions"

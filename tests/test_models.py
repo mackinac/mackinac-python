@@ -17,11 +17,13 @@ from mackinac.models.messages import (
     FeedLiveMessage,
     FeedStaleMessage,
     FundingMessage,
+    LendingActionMessage,
     LiquidityMessage,
     PrintMessage,
     QuoteMessage,
     RateDepthMessage,
     RateMarketMessage,
+    RateModelParamsMessage,
     ServerClosingMessage,
     SpreadMessage,
 )
@@ -93,6 +95,61 @@ RATE_DEPTH = {
     "time": 1748275200000,
 }
 
+RATE_MARKET_LENDING = {
+    "type": "rate_market", "exchange": "aave", "chain": "arbitrum",
+    "address": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+    "symbol": "USDC", "asset": "USDC",
+    "underlyingApy": 0.0274, "borrowApy": 0.0372,
+    "utilization": 0.822, "available": 9500000, "tvl": 53400000,
+    "impliedApy": 0.0274, "lpApy": 0, "ptPrice": 1, "ytPrice": 0,
+    "expiry": 0, "daysToExpiry": 0, "volume24h": 0,
+    "time": 1748275200000,
+}
+
+LENDING_ACTION = {
+    "type": "lending_action", "exchange": "aave", "chain": "arbitrum",
+    "asset": "USDC", "market": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+    "action": "borrow",
+    "user": "0xabcdef0000000000000000000000000000000000",
+    "onBehalfOf": "0xabcdef0000000000000000000000000000000000",
+    "amount": "1500000000", "amountUsd": 1500.0, "rateAtTime": 0.0372,
+    "blockNumber": 290845001, "txIndex": 17,
+    "logSender": "0x794a61358d6845594f94dc1db02a252b5b4814ad",
+    "time": 1748275200000,
+}
+
+LENDING_LIQUIDATE = {
+    "type": "lending_action", "exchange": "morpho", "chain": "arbitrum",
+    "asset": "USDC", "market": "0x" + "a" * 64,
+    "action": "liquidate",
+    "user": "0xborrower000000000000000000000000000000aa",
+    "liquidator": "0xliquidator00000000000000000000000000a000",
+    "amount": "5000000000", "amountUsd": 5000.0,
+    "collateralAsset": "wstETH",
+    "collateralAmount": "1500000000000000000",
+    "blockNumber": 290845200, "txIndex": 4,
+    "logSender": "0x6c247b1f6182318877311737bac0844baa518f5e",
+    "time": 1748275201500,
+}
+
+RATE_MODEL_PARAMS_AAVE = {
+    "type": "rate_model_params", "exchange": "aave", "chain": "arbitrum",
+    "market": "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+    "asset": "WETH",
+    "irmAddress": "0x429f16dba3b9e1900087cbaa7b50d38bc60fb73f",
+    "baseRate": 0, "slope1": 0.025, "slope2": 0.08,
+    "kink": 0.92, "reserveFactor": 0.15, "maxRate": 1.0,
+    "time": 1748275200000,
+}
+
+RATE_MODEL_PARAMS_MORPHO = {
+    "type": "rate_model_params", "exchange": "morpho", "chain": "arbitrum",
+    "market": "0x" + "b" * 64, "asset": "USDC",
+    "irmAddress": "0x66f30587fb8d4206918deb78eca7d5ebbafd06da",
+    "targetUtil": 0.9, "curveSteepness": 4, "adjSpeed": 50,
+    "time": 1748275200000,
+}
+
 AMMBOOK = {
     "type": "ammbook", "symbol": "WETH/USDC",
     "bids": [{"exchange": "uni", "price": 3500.15, "size": 3.9, "feeBps": 5, "time": 1748275200001}],
@@ -140,7 +197,12 @@ ERROR = {"type": "error", "code": "symbol_limit_reached",
     (DEPTH,            DepthMessage),
     (LIQUIDITY,        LiquidityMessage),
     (RATE_MARKET,      RateMarketMessage),
+    (RATE_MARKET_LENDING, RateMarketMessage),
     (RATE_DEPTH,       RateDepthMessage),
+    (LENDING_ACTION,   LendingActionMessage),
+    (LENDING_LIQUIDATE, LendingActionMessage),
+    (RATE_MODEL_PARAMS_AAVE,   RateModelParamsMessage),
+    (RATE_MODEL_PARAMS_MORPHO, RateModelParamsMessage),
     (AMMBOOK,          AmmBookMessage),
     (AMMLIQ_SNAPSHOT,  AmmLiquiditySnapshotMessage),
     (ARBFLAG,          ArbFlagMessage),
@@ -179,6 +241,59 @@ def test_rate_market_decimal_apys():
     assert isinstance(msg, RateMarketMessage)
     assert msg.impliedApy == pytest.approx(0.058)
     assert msg.underlyingApy == pytest.approx(0.031)
+    # PT-yield rows have no lending fields populated
+    assert msg.borrowApy is None
+    assert msg.utilization is None
+
+
+def test_rate_market_lending_fields_populated():
+    msg = _feed_adapter.validate_python(RATE_MARKET_LENDING)
+    assert isinstance(msg, RateMarketMessage)
+    assert msg.exchange == "aave"
+    assert msg.asset == "USDC"
+    assert msg.underlyingApy == pytest.approx(0.0274)  # supply APY
+    assert msg.borrowApy == pytest.approx(0.0372)
+    assert msg.utilization == pytest.approx(0.822)
+    assert msg.available == pytest.approx(9_500_000)
+
+
+def test_lending_action_borrow_carries_rate_at_time():
+    msg = _feed_adapter.validate_python(LENDING_ACTION)
+    assert isinstance(msg, LendingActionMessage)
+    assert msg.action == "borrow"
+    assert msg.rateAtTime == pytest.approx(0.0372)
+    assert msg.amount == "1500000000"
+    assert msg.collateralAsset is None  # not a liquidate event
+
+
+def test_lending_action_liquidate_carries_collateral():
+    msg = _feed_adapter.validate_python(LENDING_LIQUIDATE)
+    assert isinstance(msg, LendingActionMessage)
+    assert msg.action == "liquidate"
+    assert msg.collateralAsset == "wstETH"
+    assert msg.collateralAmount == "1500000000000000000"
+    assert msg.liquidator is not None
+    assert msg.rateAtTime is None  # not a borrow event
+
+
+def test_rate_model_params_aave_branch():
+    msg = _feed_adapter.validate_python(RATE_MODEL_PARAMS_AAVE)
+    assert isinstance(msg, RateModelParamsMessage)
+    assert msg.kink == pytest.approx(0.92)
+    assert msg.slope1 == pytest.approx(0.025)
+    assert msg.reserveFactor == pytest.approx(0.15)
+    # Morpho-family fields stay None
+    assert msg.targetUtil is None
+
+
+def test_rate_model_params_morpho_branch():
+    msg = _feed_adapter.validate_python(RATE_MODEL_PARAMS_MORPHO)
+    assert isinstance(msg, RateModelParamsMessage)
+    assert msg.targetUtil == pytest.approx(0.9)
+    assert msg.curveSteepness == pytest.approx(4)
+    # Aave/Compound-family fields stay None
+    assert msg.kink is None
+    assert msg.slope1 is None
 
 
 def test_ammbook_optional_arbgap():

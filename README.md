@@ -1,8 +1,9 @@
 # mackinac-client
 
 Python client for the [Mackinac](https://mackinac.io) market-data API — live
-quotes, trades, funding rates, and yield rates across 13 DeFi venues including
-Hyperliquid, dYdX V4, Uniswap V3/V4, Pendle, Spectra, GMX, Vertex, Ostium, and more.
+quotes, trades, funding rates, yield rates, and lending markets across 16
+DeFi venues including Hyperliquid, dYdX V4, Uniswap V3/V4, Pendle, Spectra,
+GMX, Vertex, Ostium, Aave V3, Compound V3, Morpho Blue, and more.
 
 ```
 pip install mackinac-client
@@ -124,6 +125,10 @@ on `msg.type` to branch per message type.
 | GMX perp | `gmx:<SYMBOL>` | `gmx:BTC` |
 | Vertex perp | `vertex:<SYMBOL>` | `vertex:SOL` |
 | Ostium (RWA) | `ostium:<BASE>/<QUOTE>` | `ostium:XAU/USD` |
+| Aave V3 lending | `aave:<ASSET>` or `aave:all` | `aave:USDC` |
+| Compound V3 lending | `compound:<ASSET>` or `compound:all` | `compound:USDC` |
+| Morpho Blue lending | `morpho:<ASSET>` or `morpho:all` | `morpho:USDC` |
+| Lending actions (all venues) | `lending:actions` | `lending:actions` |
 | Pendle/Spectra (all) | `rates:all` | — |
 | Pendle/Spectra (trades) | `rates:swaps` | — |
 | Specific yield market | `rates:<symbol-or-address>` | `rates:PT-weETH-25JUN2026` |
@@ -235,8 +240,10 @@ await client.refresh_token()       # new 7-day JWT with updated tier claims
 | `FundingMessage` | Perpetual funding rate | HL, dYdX, GMX, Vertex, Ostium |
 | `DepthMessage` | Concentrated-liquidity tick snapshot + market impact | AMM |
 | `LiquidityMessage` | LP Mint/Burn event | AMM |
-| `RateMarketMessage` | Yield-market snapshot | Pendle, Spectra |
+| `RateMarketMessage` | Yield-market or lending-market snapshot | Pendle, Spectra, Aave, Compound, Morpho |
 | `RateDepthMessage` | Depth-at-size APY quote | Pendle only |
+| `LendingActionMessage` | On-chain lending event (Supply/Borrow/Liquidate/...) | Aave, Compound, Morpho |
+| `RateModelParamsMessage` | IRM curve parameters | Aave, Compound, Morpho |
 | `AmmBookMessage` | Consolidated AMM NBBO (professional+) | Virtual |
 | `AmmLiquiditySnapshotMessage` | LP event backfill on subscribe (professional+) | Virtual |
 | `ArbFlagMessage` | Cross-venue arb gap signal (super_admin) | Virtual |
@@ -308,6 +315,9 @@ pip install 'mackinac-client[dev]'      # testing + model codegen
 
 ## Examples
 
+Examples with both API flavours use a `_sync` / `_async` filename suffix.
+Older single-flavour examples keep their original names.
+
 | File | What it shows |
 |------|---------------|
 | `examples/subscribe_quotes.py` | HL ETH live top-of-book |
@@ -318,6 +328,10 @@ pip install 'mackinac-client[dev]'      # testing + model codegen
 | `examples/amm_fee_table.py` | AMM depth → pandas fee-tier impact table |
 | `examples/rate_table.py` | rate_market stream → pandas DataFrame |
 | `examples/funding_carry.py` | CME vs HL vs Ostium carry cost comparison |
+| `examples/lending_rates_sync.py` | Aave + Compound + Morpho supply/borrow APY table (sync `Mackinac`) |
+| `examples/lending_rates_async.py` | Same lending-rate table using `AsyncClient` |
+| `examples/liquidation_watch_sync.py` | Live liquidation feed across all lending venues (sync) |
+| `examples/liquidation_watch_async.py` | Same liquidation feed using `AsyncClient` |
 
 ---
 

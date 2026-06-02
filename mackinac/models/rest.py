@@ -24,6 +24,8 @@ __all__ = [
     "HistoryPrint",
     "HistoryFunding",
     "HistoryRate",
+    "HistoryLendingAction",
+    "HistoryRateModelParams",
     # Auth / subscription
     "LoginResponse",
     "NonceResponse",
@@ -170,6 +172,71 @@ class HistoryRate(BaseModel):
     volume24h: Optional[float] = None
     tradingFeeRate: Optional[float] = None
     time: int
+
+    # Lending-only fields (Aave / Compound / Morpho) — see RateMarketMessage docs.
+    asset: Optional[str] = None
+    borrowApy: Optional[float] = None
+    utilization: Optional[float] = None
+    available: Optional[float] = None
+    rateAtTarget: Optional[float] = None
+
+
+class HistoryLendingAction(BaseModel):
+    """One row from GET /v1/history/lending/{exchange}/{asset}/actions.
+
+    Same fields as the WS ``LendingActionMessage``; see that model's docstring
+    for the field-by-field semantics, including the ``amount`` decimal-string
+    convention and which fields are populated for which action types.
+    """
+    model_config = _cfg
+    type: str = "lending_action"
+    exchange: str
+    chain: str
+    asset: str
+    market: str
+    action: str
+    user: str
+    amount: str
+    blockNumber: int
+    txIndex: int
+    logSender: str
+    time: int
+
+    onBehalfOf: Optional[str] = None
+    amountUsd: Optional[float] = None
+    rateAtTime: Optional[float] = None
+    collateralAsset: Optional[str] = None
+    collateralAmount: Optional[str] = None
+    liquidator: Optional[str] = None
+
+
+class HistoryRateModelParams(BaseModel):
+    """One row from GET /v1/history/lending/{exchange}/{asset}/model.
+
+    Same fields as the WS ``RateModelParamsMessage``; branch on which optionals
+    are populated to pick the IRM family (piecewise-linear vs adaptive-curve).
+    """
+    model_config = _cfg
+    type: str = "rate_model_params"
+    exchange: str
+    chain: str
+    market: str
+    asset: str
+    irmAddress: str
+    time: int
+
+    # Aave / Compound (piecewise-linear)
+    baseRate: Optional[float] = None
+    slope1: Optional[float] = None
+    slope2: Optional[float] = None
+    kink: Optional[float] = None
+    reserveFactor: Optional[float] = None
+    maxRate: Optional[float] = None
+
+    # Morpho AdaptiveCurveIRM (exponential)
+    targetUtil: Optional[float] = None
+    curveSteepness: Optional[float] = None
+    adjSpeed: Optional[float] = None
 
 
 # ── Auth / Subscription ───────────────────────────────────────────────────────
